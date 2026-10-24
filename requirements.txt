@@ -1,0 +1,5 @@
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+yt-dlp==2024.10.22
+gdown==5.2.0
+tqdm==4.66.5

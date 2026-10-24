@@ -1,0 +1,91 @@
+name: Remove Watermark
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_source:
+        description: "Sumber video"
+        required: true
+        default: "youtube"
+        type: choice
+        options:
+          - youtube
+          - drive
+          - direct
+      video_url:
+        description: "URL video (YouTube / Google Drive / direct link)"
+        required: true
+        type: string
+      method:
+        description: "Metode hapus watermark"
+        required: true
+        default: "repaint"
+        type: choice
+        options:
+          - repaint
+          - crop
+
+permissions:
+  contents: write
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download video
+        env:
+          VIDEO_SOURCE: \${{ inputs.video_source }}
+          VIDEO_URL: \${{ inputs.video_url }}
+        run: |
+          python -c "from scripts.downloader import get_video; import os; \
+            get_video(os.environ['VIDEO_SOURCE'], os.environ['VIDEO_URL'])"
+
+      - name: Process video (hapus watermark)
+        env:
+          METHOD: \${{ inputs.method }}
+        run: python scripts/process.py
+
+      - name: Encode final (ffmpeg - supaya playable di mana-mana)
+        run: |
+          ffmpeg -y -i /tmp/output_video.mp4 \
+            -c:v libx264 -preset medium -crf 20 \
+            -c:a aac -b:a 128k \
+            /tmp/final_output.mp4
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: watermark-removed-\${{ inputs.method }}
+          path: /tmp/final_output.mp4
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: run-\${{ github.run_number }}
+          name: "Watermark Removed - Run #\${{ github.run_number }}"
+          body: |
+            **Metode:** \${{ inputs.method }}
+            **Sumber:** \${{ inputs.video_source }}
+            **URL:** \${{ inputs.video_url }}
+            **Waktu:** \${{ github.event.repository.updated_at }}
+          files: /tmp/final_output.mp4
+          draft: false
+          prerelease: false
