@@ -3,22 +3,10 @@ name: Remove Watermark
 on:
   workflow_dispatch:
     inputs:
-      video_source:
-        description: 'Sumber video'
-        required: true
-        default: 'youtube'
-        type: choice
-        options: [youtube, drive, direct]
       video_url:
         description: 'URL video'
         required: true
         type: string
-      method:
-        description: 'Metode'
-        required: true
-        default: 'repaint'
-        type: choice
-        options: [repaint, crop]
 
 permissions:
   contents: write
@@ -29,32 +17,28 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-        
       - name: Install dependencies
         run: pip install -r requirements.txt
         
       - name: Download video
         env:
-          SOURCE: ${{ inputs.video_source }}
           URL: ${{ inputs.video_url }}
-        run: python -c "import os; from scripts.downloader import get_video; get_video(os.environ['SOURCE'], os.environ['URL'])"
+        run: python -c "import os; from scripts.downloader import get_video; get_video('youtube', os.environ['URL'])"
         
       - name: Process video
-        env:
-          METHOD: ${{ inputs.method }}
         run: python scripts/process.py
         
-      - name: Encode to standard MP4 (Fix HP compatibility)
+      - name: Merge Video with Original Audio (FIX SUARA HILANG)
         run: |
-          ffmpeg -y -i /tmp/output_video.mp4 -c:v libx264 -preset fast -crf 22 -c:a aac /tmp/final.mp4
-          
+          ffmpeg -y -i /tmp/output_video.mp4 -i /tmp/input_video.mp4 \
+                 -c:v libx264 -preset fast -crf 22 -c:a aac -map 0:v:0 -map 1:a:0 \
+                 -shortest /tmp/final.mp4
+                 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
